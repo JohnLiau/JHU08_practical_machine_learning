@@ -1,0 +1,93 @@
+---
+title: "Prediction of Exercise Manner"
+author: "John Liau"
+date: "Saturday, January 24, 2015"
+output: html_document
+---
+
+# Executive Summary
+
+A model was built to predict the manner of how a group of enthusiasts exercise. The analysis was performed upon the Weight Lifting Exercises dataset published by Velloso et al in 2013. The model development sample (in pml-training.csv) was splitted into training and testing data sets randomly by halves. A Random Forest algorithm was employed to model the training data set for its accuracy with the price of long processing time. The resulting model was validated on the testing dataset. The sample error was low as expected, and there's no overfitting. Finally, the model was applied to predict 20 reserved test samples (in pml-testing.csv).
+
+# Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. The data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants performing barbell lifts correctly and incorrectly in 5 different ways are employed in the current analysis. Thanks to Velloso et al. for their Weight Lifting Exercises (WLE) dataset. More information is available from their website: http://groupware.les.inf.puc-rio.br/har.
+
+# Data Processing
+
+Both pml-training.csv and pml-testing.csv data files have been downloaded and zipped together into a single zip file, input.zip. The first csv file was then read into R.
+
+```{r}
+library(caret)
+setwd("~/YCL/Learn/Data Science/JHU08 Practical Machine Learning")
+data<-read.table(unz("input.zip","pml-training.csv"),header=T,sep=",",quote="\"",na.strings=c("NA","#DIV/0!",""))
+dim(data); head(data); summary(data)
+```
+
+There're many missing or invalid values, NA's, in the data, and they might cause problems when building models or predicting results. Missing values can be imputed or excluded. The analysis excludes variables with missing values from model predictor lists but not the entire records.
+
+```{r}
+type1=c()
+type2=c()
+valu2=c()
+type7=c()
+valu7=c()
+exclude=c()
+for (i in 1:dim(data)[2]) {
+  type1[i]=names(summary(data[,i])[1])
+  type2[i]=names(summary(data[,i])[2])
+  valu2[i]=summary(data[,i])[2]
+  type7[i]=names(summary(data[,i])[7])
+  valu7[i]=summary(data[,i])[7]
+  exclude[i]=ifelse((type1[i]=="Mode" & type2[i]=="NA's" &  valu2[i]>0) | (type7[i]=="NA's" &  valu7[i]>0),1,0)
+}
+exclude[is.na(exclude)]=0
+exclude
+keep=c()
+for (i in 1:dim(data)[2]) {
+  if (exclude[i]==0) { keep[i]=i }
+}
+keep[is.na(keep)]=0
+keep
+```
+
+The composition of the target (dependent) variable, classe, are listed below.
+
+```{r}
+summary(data$classe)/dim(data)[1]
+```
+
+The data table is then splitted into training and testing datasets for cross validation.
+
+```{r}
+inTrain<-createDataPartition(y=data$classe,p=0.5, list=FALSE)
+training<-data[inTrain,keep]; dim(training); summary(training$classe)/dim(training)[1]
+testing<-data[-inTrain,keep]; dim(testing); summary(testing$classe)/dim(testing)[1]
+```
+
+# Modeling
+
+A Random Forest model is then built upon the training dataset for accuracy with the price of a long processing time. The class error is only 1.515% (1 in 6,952).
+
+```{r cache=TRUE}
+model<-train(classe~.,method="rf",data=training,prox=TRUE)
+model$finalModel
+```
+
+# Cross Validation
+
+The model is tested on the testing sample for cross validation.
+
+```{r}
+testComp<-predict(model,testing)
+table(testComp,testing$classe)
+```
+
+# Final Testing
+
+The results show the model fit both the training and testing samples well without overfitting, and the out of sample error is small as expected. The model is cross validated and thus applied to the reserved 20 testing samples.
+
+```{r}
+reserved<-read.table(unz("input.zip","pml-testing.csv"),header=T,sep=",",quote="\"",na.strings=c("NA","#DIV/0!","")); reserved
+pred<-predict(model,reserved); pred
+```
